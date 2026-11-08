@@ -1,0 +1,35 @@
+# company data and everything derived from it (never committed)
+data/*
+!data/README.md
+outputs/
+*.csv
+*.tsv
+*.xlsx
+*.xls
+*.parquet
+*.zip
+*.pkl
+*.npy
+*.npz
+*.pt
+*.safetensors
+
+# local model copies (set model.name in the config to a local folder instead)
+models/
+hf_cache/
+
+# credentials and local tooling
+.env
+.env.*
+*.key
+.claude/
+.vscode/
+.idea/
+
+# python / jupyter
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+.venv/
+venv/

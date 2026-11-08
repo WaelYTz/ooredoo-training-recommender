@@ -1,0 +1,93 @@
+# Recommend_V4.ipynb's boost weights and tunable constants, extracted from
+# hardcoded notebook cells into a single editable file.
+#
+# IMPORTANT CAVEAT, carried over from the notebook and PROJECT_JOURNAL.md
+# Phase 27/29: none of the weight *magnitudes* below are empirically tuned.
+# The leave-one-out ground truth (PROJECT_JOURNAL.md Phase 24) turned out to
+# be popularity-contaminated and unusable for tuning against, so these are
+# still reasoned starting values, not optimized ones. Edit them to
+# experiment, but there is currently no trustworthy automatic metric to
+# validate a change against -- re-run the LLM-judge sample
+# (PROJECT_JOURNAL.md Phase 29) after any change here, the same way V4's
+# own change was verified before being trusted.
+
+boosts:
+  # Field match: TF-IDF-weighted overlap between an employee's department
+  # (Bu_new) and a course's text. Raised from 0.03 (V3) to 0.15 in V4 so a
+  # strong field match can compete with the combined ceiling of the three
+  # generic signals below (0.05 + 0.07 + 0.05 = 0.17) instead of being
+  # structurally dominated by them -- see PROJECT_JOURNAL.md Phase 27.
+  field_boost: 0.15
+
+  # Stated-preference match: only applied if the preference text contains a
+  # multi-word phrase from the catalog's own Skills_EN/Subjects_EN
+  # vocabulary (see build_preference_vocab / preference_is_informative
+  # below). This is the gate's third design iteration -- Phase 16.
+  preference_boost: 0.15
+
+  # Language: from completed history (Inferred_Language), or a smaller
+  # default boost for English when no language signal exists at all.
+  language_match_boost: 0.07
+  language_default_en_boost: 0.03
+
+  # Seniority level: soft match/mismatch, not a hard filter. Blank course
+  # `Level` (120 rows in the real catalog) is treated as neutral, not a
+  # mismatch.
+  level_match_boost: 0.05
+  level_mismatch_penalty: 0.10
+
+  # Training format: fires when an employee's Preferred_Training_Type equals
+  # the course's format (catalog `Training_Type` column, or
+  # training_type.default_course_type below when a course has none). The
+  # current catalog is LinkedIn Learning only -- no Training_Type column, so
+  # every course defaults to Online -- which makes this the same flat amount
+  # on every course for "Online" employees: a NO-OP for ranking (ablation
+  # showed identical Precision/Recall/MRR with it on or off for all 3
+  # compared models, PROJECT_JOURNAL.md Phase 24). It starts separating
+  # courses as soon as catalog rows carry a Training_Type of
+  # "On-site Internal" / "On-site External" -- no code change needed.
+  training_type_boost: 0.05
+
+  # V4's rebalance mechanism, replacing V3's flat -0.08 domain-gate penalty
+  # (which had a known exact-zero-threshold gap -- Phase 19). Scales the
+  # POSITIVE generic boosts (level-match, language, training-type) down
+  # toward this floor when there's little-to-no real topical signal
+  # (field-match + preference) for a specific (employee, course) pick.
+  # 1.0 would mean "no rebalance at all" (back to V3's behavior for these
+  # three boosts); this floor is a reasoned value, not tuned -- see Phase 27.
+  generic_boost_floor: 0.3
+
+field_match:
+  # Department-name tokens shorter than this, or in the stopword list, are
+  # dropped before TF-IDF weighting (Recommend_V3.ipynb / V4).
+  min_field_token_len: 4
+  field_stopwords: ["and", "of", "the", "for", "role", "focus"]
+
+preference_gate:
+  # Multi-word catalog phrases that are too generic to trust as evidence of
+  # a real stated preference, even though they technically appear in
+  # Skills_EN/Subjects_EN -- confirmed too-broad during V3 hand-checking
+  # (Phase 16/25).
+  vocab_blocklist: ["leadership skills", "professional development"]
+
+training_type:
+  # Format assumed for catalog rows with a blank Training_Type, or for the
+  # whole catalog when it has no Training_Type column (true of today's
+  # LinkedIn-Learning-only catalog). Compared case-insensitively against
+  # Preferred_Training_Type (Online / On-site Internal / On-site External).
+  default_course_type: "Online"
+
+language:
+  # An employee's Inferred_Language is only trusted if one language
+  # accounts for more than this fraction of their completed history.
+  dominance_threshold: 0.6
+
+ranking:
+  top_k: 3
+
+model:
+  name: "Qwen/Qwen3-Embedding-0.6B"
+  # Per the model's own card: queries (employee/preference text) get a
+  # "query" prompt; documents (course text) get none.
+  query_prompt_name: "query"
+  language_condition: "translated_en"  # native showed no aggregate benefit -- Phase 23
